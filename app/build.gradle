@@ -1,6 +1,7 @@
 apply plugin: 'com.android.application'
 
 android {
+    namespace "com.lorenzomoscati.np"
     compileSdkVersion 35
     defaultConfig {
         applicationId "com.lorenzomoscati.np"
