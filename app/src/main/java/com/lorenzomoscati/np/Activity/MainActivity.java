@@ -101,7 +101,7 @@ public class MainActivity extends AppCompatActivity {
 		Toast.makeText(getApplicationContext(), getString(R.string.alert_overlay_request), Toast.LENGTH_LONG).show();
 
 		Intent intent = new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:" + getPackageName()));
-		startActivityForResult(intent, CODE_DRAW_OVER_OTHER_APP_PERMISSION);
+		startActivity(intent);
 
 	}
 

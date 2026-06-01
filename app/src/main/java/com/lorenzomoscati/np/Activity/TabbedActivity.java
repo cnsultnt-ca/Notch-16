@@ -59,7 +59,8 @@ public class TabbedActivity extends AppCompatActivity {
 			
 			@Override
 			public void onClick(View v) {
-				
+				Log.d("NP_Debug", "FAB clicked, checkServiceOn=" + checkServiceOn() + " service_status=" + preferences.getBoolean("service_status", false) + " service_started=" + preferences.getBoolean("service_started", false));
+
 				if (checkServiceOn()) {
 					
 					Intent serviceIntent = new Intent(getApplicationContext(), OverlayAccessibilityService.class);
@@ -79,7 +80,7 @@ public class TabbedActivity extends AppCompatActivity {
 							
 							editor.putBoolean("service_status", true);
 							editor.apply();
-							
+							startService(serviceIntent);
 							
 						}
 						
