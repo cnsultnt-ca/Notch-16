@@ -20,6 +20,7 @@ import android.graphics.Path;
 import android.graphics.PixelFormat;
 import android.graphics.RectF;
 import android.graphics.SweepGradient;
+import android.os.BatteryManager;
 import android.os.Build;
 import android.os.Handler;
 import android.util.Log;
@@ -204,23 +205,33 @@ public class OverlayAccessibilityService extends AccessibilityService implements
 	private void init() {
 		
 		// Getting the window manager
-		// WINDOW_SERVICE = "window" (it's static and final)
-		// windowManager is null
-		windowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
+		if (windowManager == null) {
+			windowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
+		}
 		
 		// The parent image view in which the bitmap is set
-		overlayView = LayoutInflater.from(this).inflate(R.layout.overlay_float, null);
+		if (overlayView == null) {
+			overlayView = LayoutInflater.from(this).inflate(R.layout.overlay_float, null);
+			// Properly rotates the overlay
+			overlayView.setRotationY(180);
+		}
 		
 		// Sets the managers to read notch, color and settings
-		notchManager = new NotchManager(getApplicationContext());
-		settingsManager = new SettingsManager(getApplicationContext());
-		batteryManager = new BatteryConfigManager(getApplicationContext());
+		if (notchManager == null) notchManager = new NotchManager(getApplicationContext());
+		if (settingsManager == null) settingsManager = new SettingsManager(getApplicationContext());
+		if (batteryManager == null) batteryManager = new BatteryConfigManager(getApplicationContext());
 		
-		initPref(mContext);
-		
-		// Properly rotates the overlay
-		overlayView.setRotationY(180);
-		
+		initPref(mContext != null ? mContext : this);
+
+		if (batteryLevel <= 0) {
+			IntentFilter ifilter = new IntentFilter(Intent.ACTION_BATTERY_CHANGED);
+			Intent batteryStatus = registerReceiver(null, ifilter);
+			if (batteryStatus != null) {
+				int level = batteryStatus.getIntExtra(BatteryManager.EXTRA_LEVEL, -1);
+				int scale = batteryStatus.getIntExtra(BatteryManager.EXTRA_SCALE, -1);
+				batteryLevel = (int) (level * 100 / (float) scale);
+			}
+		}
 	}
 	
 	@SuppressLint("InflateParams")
@@ -413,10 +424,8 @@ public class OverlayAccessibilityService extends AccessibilityService implements
 	}
 
 	private void updateOverlay(Context context) {
-		Log.d("NP_Debug", "updateOverlay called, service_status=" + context.getSharedPreferences("preferences", 0).getBoolean("service_status", false));
+		Log.d("NP_Debug", "updateOverlay called, service_status=" + preferences.getBoolean("service_status", false));
 		Log.d("NP_Debug", "notch w=" + notchManager.getWidth() + " h=" + notchManager.getHeight());
-
-		initPref(context);
 
 		if (preferences.getBoolean("service_status", false) && batteryLevel > 0) {
 			makeOverlay(batteryLevel);
@@ -427,17 +436,20 @@ public class OverlayAccessibilityService extends AccessibilityService implements
 	private void stopReceivers() {
 		
 		// When this is called, the receiver are unregistered
-		assert receiverOrientation != null;
-		unregisterReceiver(receiverOrientation);
+		if (receiverOrientation != null) {
+			unregisterReceiver(receiverOrientation);
+		}
 		
-		assert receiverBattery != null;
-		unregisterReceiver(receiverBattery);
+		if (receiverBattery != null) {
+			unregisterReceiver(receiverBattery);
+		}
 		
-		preferences.unregisterOnSharedPreferenceChangeListener(listenerPreferences);
-		notchPreferences.unregisterOnSharedPreferenceChangeListener(listenerNotchPreferences);
-		settingsPreferences.unregisterOnSharedPreferenceChangeListener(listenerSettingsPreferences);
-		batteryConfigPreferences.unregisterOnSharedPreferenceChangeListener(listenerBatteryConfigPreferences);
-		
+		if (preferences != null) preferences.unregisterOnSharedPreferenceChangeListener(listenerPreferences);
+		if (notchPreferences != null) notchPreferences.unregisterOnSharedPreferenceChangeListener(listenerNotchPreferences);
+		if (settingsPreferences != null) settingsPreferences.unregisterOnSharedPreferenceChangeListener(listenerSettingsPreferences);
+		if (batteryConfigPreferences != null) batteryConfigPreferences.unregisterOnSharedPreferenceChangeListener(listenerBatteryConfigPreferences);
+
+		receiversRegistered = false;
 	}
 
 	// -- Overlay Manager --
@@ -509,9 +521,6 @@ public class OverlayAccessibilityService extends AccessibilityService implements
 	}
 
 	// Makes the notch for a portrait view
-
-	
-	// Makes the notch for a landscape view
 	private void makeOverlayPortrait(int battery) {
 		Log.d("NP_Debug", "makeOverlayPortrait called, battery=" + battery);
 
@@ -525,7 +534,7 @@ public class OverlayAccessibilityService extends AccessibilityService implements
 		overlayView.setRotation(0);
 		overlayView.setRotationY(180);
 		overlayView.setRotationX(0);
-		overlayView.setVisibility(View.VISIBLE);  // Move to here, before try/catch
+		overlayView.setVisibility(View.VISIBLE);
 
 		try {
 			windowManager.updateViewLayout(overlayView, generateParamsPortrait(bitmap.getHeight(), bitmap.getWidth()));
@@ -538,8 +547,8 @@ public class OverlayAccessibilityService extends AccessibilityService implements
 			}
 		}
 	}
-	// Makes the notch for a landscape reverse view
-// Makes the notch for a landscape view
+
+	// Makes the notch for a landscape view
 	private void makeOverlayLandscape(int battery) {
 		Bitmap bitmap = drawNotch(battery);
 		bitmap = rotateBitmap(bitmap, 90f);
@@ -574,6 +583,8 @@ public class OverlayAccessibilityService extends AccessibilityService implements
 		img.setRotation(0);
 
 		overlayView.setRotation(0);
+		overlayView.setRotationY(180);
+		overlayView.setRotationX(0);
 		overlayView.setVisibility(View.VISIBLE);
 
 		try {
@@ -591,21 +602,19 @@ public class OverlayAccessibilityService extends AccessibilityService implements
 		
 		Log.d("Called", "removeOverlay has been called");
 		
-		if (windowManager == null) {
-			
-			Log.e("Null", "windowManager is null");
-			
+		if (windowManager == null || overlayView == null) {
+			return;
 		}
 		
-		if (overlayView == null) {
-			
-			Log.e("Null", "overlayView is null");
-			
+		try {
+			windowManager.removeView(overlayView);
+		} catch (Exception e) {
+			Log.e("NP_Debug", "removeView failed: " + e.getMessage());
 		}
 		
-		windowManager.removeView(overlayView);
-		
-		notificationManager.cancel(notificationID);
+		if (notificationManager != null) {
+			notificationManager.cancel(notificationID);
+		}
 
 	}
 
@@ -631,14 +640,6 @@ public class OverlayAccessibilityService extends AccessibilityService implements
 		p.x = notchManager.getxPositionPortrait();
 		p.y = 0;
 
-		overlayView.setOnApplyWindowInsetsListener((v, insets) -> {
-			if (insets.isVisible(android.view.WindowInsets.Type.statusBars())) {
-				overlayView.setVisibility(View.VISIBLE);
-			} else {
-				overlayView.setVisibility(View.GONE);
-			}
-			return insets;
-		});
 		Log.d("NP_Debug", "x=" + p.x + " y=" + p.y + " w=" + w + " h=" + h + " gravity=" + p.gravity);
 		return p;
 
