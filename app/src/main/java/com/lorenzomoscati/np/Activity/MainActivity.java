@@ -3,7 +3,6 @@ package com.lorenzomoscati.np.Activity;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 
-import android.content.DialogInterface;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Bundle;
@@ -13,9 +12,6 @@ import android.widget.Toast;
 import com.lorenzomoscati.np.R;
 
 public class MainActivity extends AppCompatActivity {
-
-	// Permission request code to draw over other apps
-	private static final int CODE_DRAW_OVER_OTHER_APP_PERMISSION = 2084;
 
 	@Override
 	protected void onCreate(Bundle savedInstanceState) {
@@ -63,27 +59,9 @@ public class MainActivity extends AppCompatActivity {
 		
 		final AlertDialog.Builder builder = new AlertDialog.Builder(this);
 
-		builder.setPositiveButton(getString(R.string.popup_positive), new DialogInterface.OnClickListener() {
+		builder.setPositiveButton(getString(R.string.popup_positive), (dialog, which) -> requestOverlayPermission());
 
-			@Override
-			public void onClick(DialogInterface dialog, int which) {
-				
-				requestOverlayPermission();
-
-			}
-
-		});
-
-		builder.setNegativeButton(getString(R.string.popup_negative), new DialogInterface.OnClickListener() {
-
-			@Override
-			public void onClick(DialogInterface dialog, int which) {
-
-				finish();
-
-			}
-
-		});
+		builder.setNegativeButton(getString(R.string.popup_negative), (dialog, which) -> finish());
 
 		builder.setCancelable(false);
 

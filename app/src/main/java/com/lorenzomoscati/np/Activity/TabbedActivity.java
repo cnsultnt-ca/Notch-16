@@ -13,6 +13,8 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.content.pm.ServiceInfo;
+import android.content.res.ColorStateList;
+import android.graphics.Color;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.PowerManager;
@@ -36,6 +38,7 @@ public class TabbedActivity extends AppCompatActivity {
 	
 	private ViewPager viewPager;
 	private Context mContext;
+	private SharedPreferences.OnSharedPreferenceChangeListener listener;
 	
 	@Override
 	protected void onCreate(Bundle savedInstanceState) {
@@ -47,69 +50,44 @@ public class TabbedActivity extends AppCompatActivity {
 		mContext = this;
 		
 		final SharedPreferences preferences = getApplicationContext().getSharedPreferences("preferences", 0);
-		final SharedPreferences.Editor editor = preferences.edit();
 		
 		init();
 
 		makeServiceSnackBar();
 		
 		FloatingActionButton fab = findViewById(R.id.floatingActionButton);
-		
-		fab.setOnClickListener(new View.OnClickListener() {
-			
-			@Override
-			public void onClick(View v) {
-				Log.d("NP_Debug", "FAB clicked, checkServiceOn=" + checkServiceOn() + " service_status=" + preferences.getBoolean("service_status", false) + " service_started=" + preferences.getBoolean("service_started", false));
 
-				if (checkServiceOn()) {
-					
-					Intent serviceIntent = new Intent(getApplicationContext(), OverlayAccessibilityService.class);
-					
-					if (!preferences.getBoolean("service_status", false)) {
-						
-						if (!preferences.getBoolean("service_started", false)) {
-							
-							editor.putBoolean("service_status", true);
-							editor.apply();
-							
-							startService(serviceIntent);
-							
-						}
-						
-						else {
-							
-							editor.putBoolean("service_status", true);
-							editor.apply();
-							startService(serviceIntent);
-							
-						}
-						
-					} else {
-						
-						Log.d("Called", "stopService has been called");
-						
-						editor.putBoolean("service_status", false);
-						editor.apply();
-						
-						Log.d("Changed", "service_status changed to: " + preferences.getBoolean("service_status", true));
-						
-					}
-					
-				}
-				
-				else {
-					
-					// Creates the intent to the settings page
-					Intent intent = new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS);
-					startActivity(intent);
-					
-					// Makes a toast to notify the user about what setting to turn on
-					Toast.makeText(getApplicationContext(), getString(R.string.popup_accessibility_toast), Toast.LENGTH_LONG).show();
-					
-				}
-				
+		updateFabColor(fab, preferences.getBoolean("service_status", false));
+
+		listener = (sharedPreferences, key) -> {
+			if (Objects.equals(key, "service_status")) {
+				updateFabColor(fab, sharedPreferences.getBoolean(key, false));
 			}
-			
+		};
+		preferences.registerOnSharedPreferenceChangeListener(listener);
+		
+		fab.setOnClickListener(v -> {
+			boolean currentStatus = preferences.getBoolean("service_status", false);
+			Log.d("NP_Debug", "FAB clicked, checkServiceOn=" + checkServiceOn() + " currentStatus=" + currentStatus);
+
+			if (checkServiceOn()) {
+				SharedPreferences.Editor editor = preferences.edit();
+				editor.putBoolean("service_status", !currentStatus);
+				editor.commit();
+
+				if (!currentStatus) { // We are turning it ON
+					Intent serviceIntent = new Intent(getApplicationContext(), OverlayAccessibilityService.class);
+					startService(serviceIntent);
+				}
+			}
+			else {
+				// Creates the intent to the settings page
+				Intent intent = new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS);
+				startActivity(intent);
+				
+				// Makes a toast to notify the user about what setting to turn on
+				Toast.makeText(getApplicationContext(), getString(R.string.popup_accessibility_toast), Toast.LENGTH_LONG).show();
+			}
 		});
 
 	}
@@ -135,19 +113,13 @@ public class TabbedActivity extends AppCompatActivity {
 			Snackbar bar = Snackbar.make(viewPager, getString(R.string.battery_optimization), Snackbar.LENGTH_INDEFINITE);
 			
 			// Sets the button to disable it
-			bar.setAction(getString(R.string.disable), new View.OnClickListener() {
+			bar.setAction(getString(R.string.disable), v -> {
 				
-				@SuppressLint("BatteryLife")
-				@Override
-				public void onClick(View v) {
-					
-					// Creates the intent to the settings page
-					Intent intent = new Intent();
-					intent.setAction(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS);
-					intent.setData(Uri.parse("package:" + getPackageName()));
-					startActivity(intent);
-					
-				}
+				// Creates the intent to the settings page
+				Intent intent = new Intent();
+				intent.setAction(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS);
+				intent.setData(Uri.parse("package:" + getPackageName()));
+				startActivity(intent);
 				
 			});
 			
@@ -168,28 +140,18 @@ public class TabbedActivity extends AppCompatActivity {
 				// Sets the title and length (infinite)
 				Snackbar bar = Snackbar.make(viewPager, getString(R.string.miui_note), Snackbar.LENGTH_INDEFINITE);
 				
-				bar.setAction(getString(R.string.more_info), new View.OnClickListener() {
+				bar.setAction(getString(R.string.more_info), v -> {
 					
-					@Override
-					public void onClick(View v) {
-						
-						new AlertDialog.Builder(mContext)
-								.setTitle(getString(R.string.overlay_disappearing))
-								.setMessage(getString(R.string.overlay_disappearing_desc))
-								.setPositiveButton(getString(R.string.understood), new DialogInterface.OnClickListener() {
-									
-									@Override
-									public void onClick(DialogInterface dialog, int which) {
-										
-										editor.putBoolean("already_appeared_miui", true);
-										editor.apply();
-										
-									}
-							
-								})
-								.show();
-						
-					}
+					new AlertDialog.Builder(mContext)
+							.setTitle(getString(R.string.overlay_disappearing))
+							.setMessage(getString(R.string.overlay_disappearing_desc))
+							.setPositiveButton(getString(R.string.understood), (dialog, which) -> {
+								
+								editor.putBoolean("already_appeared_miui", true);
+								editor.apply();
+								
+							})
+							.show();
 					
 				});
 				
@@ -255,7 +217,7 @@ public class TabbedActivity extends AppCompatActivity {
 			ServiceInfo enabledServiceInfo = enabledService.getResolveInfo().serviceInfo;
 
 			// Checks if the service is our service
-			if (enabledServiceInfo.packageName.equals(context.getPackageName()) && enabledServiceInfo.name.equals(OverlayAccessibilityService.class.getName())) {
+			if (Objects.equals(enabledServiceInfo.packageName, context.getPackageName()) && Objects.equals(enabledServiceInfo.name, OverlayAccessibilityService.class.getName())) {
 
 				return true;
 
@@ -265,6 +227,11 @@ public class TabbedActivity extends AppCompatActivity {
 
 		return false;
 
+	}
+
+	private void updateFabColor(FloatingActionButton fab, boolean isOn) {
+		int color = isOn ? Color.parseColor("#90EE90") : Color.parseColor("#FFCCCB");
+		fab.setBackgroundTintList(ColorStateList.valueOf(color));
 	}
 
 }
