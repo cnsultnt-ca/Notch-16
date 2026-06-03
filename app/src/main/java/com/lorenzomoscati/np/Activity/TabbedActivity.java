@@ -24,7 +24,7 @@ import android.view.View;
 import android.view.accessibility.AccessibilityManager;
 import android.widget.Toast;
 
-import com.google.android.material.floatingactionbutton.FloatingActionButton;
+import androidx.appcompat.widget.SwitchCompat;
 import com.google.android.material.snackbar.Snackbar;
 import com.google.android.material.tabs.TabLayout;
 import com.lorenzomoscati.np.Adapter.SectionsPageAdapter;
@@ -55,37 +55,36 @@ public class TabbedActivity extends AppCompatActivity {
 
 		makeServiceSnackBar();
 		
-		FloatingActionButton fab = findViewById(R.id.floatingActionButton);
+		SwitchCompat serviceSwitch = findViewById(R.id.service_switch);
 
-		updateFabColor(fab, preferences.getBoolean("service_status", false));
+		serviceSwitch.setChecked(preferences.getBoolean("service_status", false));
+		updateSwitchColor(serviceSwitch, serviceSwitch.isChecked());
 
 		listener = (sharedPreferences, key) -> {
 			if (Objects.equals(key, "service_status")) {
-				updateFabColor(fab, sharedPreferences.getBoolean(key, false));
+				boolean isOn = sharedPreferences.getBoolean(key, false);
+				if (serviceSwitch.isChecked() != isOn) {
+					serviceSwitch.setChecked(isOn);
+				}
+				updateSwitchColor(serviceSwitch, isOn);
 			}
 		};
 		preferences.registerOnSharedPreferenceChangeListener(listener);
-		
-		fab.setOnClickListener(v -> {
-			boolean currentStatus = preferences.getBoolean("service_status", false);
-			Log.d("NP_Debug", "FAB clicked, checkServiceOn=" + checkServiceOn() + " currentStatus=" + currentStatus);
 
+		serviceSwitch.setOnCheckedChangeListener((buttonView, isChecked) -> {
 			if (checkServiceOn()) {
 				SharedPreferences.Editor editor = preferences.edit();
-				editor.putBoolean("service_status", !currentStatus);
-				editor.commit();
+				editor.putBoolean("service_status", isChecked);
+				editor.apply();
 
-				if (!currentStatus) { // We are turning it ON
+				if (isChecked) {
 					Intent serviceIntent = new Intent(getApplicationContext(), OverlayAccessibilityService.class);
 					startService(serviceIntent);
 				}
-			}
-			else {
-				// Creates the intent to the settings page
+			} else if (isChecked) {
+				serviceSwitch.setChecked(false);
 				Intent intent = new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS);
 				startActivity(intent);
-				
-				// Makes a toast to notify the user about what setting to turn on
 				Toast.makeText(getApplicationContext(), getString(R.string.popup_accessibility_toast), Toast.LENGTH_LONG).show();
 			}
 		});
@@ -141,18 +140,18 @@ public class TabbedActivity extends AppCompatActivity {
 				Snackbar bar = Snackbar.make(viewPager, getString(R.string.miui_note), Snackbar.LENGTH_INDEFINITE);
 				
 				bar.setAction(getString(R.string.more_info), v -> {
-					
+
 					new AlertDialog.Builder(mContext)
 							.setTitle(getString(R.string.overlay_disappearing))
 							.setMessage(getString(R.string.overlay_disappearing_desc))
 							.setPositiveButton(getString(R.string.understood), (dialog, which) -> {
-								
+
 								editor.putBoolean("already_appeared_miui", true);
 								editor.apply();
-								
+
 							})
 							.show();
-					
+
 				});
 				
 				// Shows the bar
@@ -229,9 +228,10 @@ public class TabbedActivity extends AppCompatActivity {
 
 	}
 
-	private void updateFabColor(FloatingActionButton fab, boolean isOn) {
+	private void updateSwitchColor(SwitchCompat sw, boolean isOn) {
 		int color = isOn ? Color.parseColor("#90EE90") : Color.parseColor("#FFCCCB");
-		fab.setBackgroundTintList(ColorStateList.valueOf(color));
+		sw.setThumbTintList(ColorStateList.valueOf(color));
+		sw.setTrackTintList(ColorStateList.valueOf(color));
 	}
 
 }
